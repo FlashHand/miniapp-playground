@@ -1,6 +1,6 @@
 # Audience BOT 设计
 
-状态：v0.1.0，2026-11-08。Audience BOT 是给 [Dozin](https://dozin.ai) 用的抖音直播间 AI 助手：弹幕和主播语音进入一个 Dozin 对话，对话里的 AI 按你写的人格回弹幕。它作为**外置**部件交付：不在 Dozin 的安装包里，每个部件单独安装，Dozin 只提供通用能力。
+状态：v0.2.0，2026-11-08（v0.2.0：扩展随小程序安装、改名 audience-bot、监控面板、按标签页采音自检）。Audience BOT 是给 [Dozin](https://dozin.ai) 用的抖音直播间 AI 助手：弹幕和主播语音进入一个 Dozin 对话，对话里的 AI 按你写的人格回弹幕。它作为**外置**部件交付：不在 Dozin 的安装包里，每个部件单独安装，Dozin 只提供通用能力。
 
 ## #1 组成
 

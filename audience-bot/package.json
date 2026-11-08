@@ -1,6 +1,6 @@
 {
   "name": "audience-bot",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "version_code": "261108120904",
   "private": true,
   "description": "Douyin live room AI bot for Dozin: a Gateway connector extension, a persona mini-app, a skill and a local speech kit.",

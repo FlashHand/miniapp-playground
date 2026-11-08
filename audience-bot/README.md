@@ -14,13 +14,15 @@ Audience BOT 让 Dozin 里的一个 AI 对话接管抖音直播间：弹幕和�
 | [`kit/`](kit/) | 本机语音识别（macOS）：把主播的话转成文字给扩展读 |
 | [`docs/design.md`](docs/design.md) | 设计：组成、消息流、两层提示词、人格页行为 |
 
-## 现状（v0.1.0）
+## 现状（v0.2.0）
 
 | 部分 | 状态 |
 |---|---|
-| 扩展、技能、语音识别 kit | 可用；需要支持 Gateway 对话接入（connector `chat`）的 Dozin 版本。真直播间里的发送还没有实测 |
+| 扩展 `audience-bot` | 弹幕收发、直播间监控面板、按标签页采音自检。需要支持 connector `chat` 与「小程序带扩展」的 Dozin 版本；真直播间里的发送、面板与采音还没有实测 |
 | 小程序（人格页） | 代码与测试完成；需要 Dozin 支持外置小程序和 `MAESTROSDK.connectors`，在这之前页面会提示版本不支持 |
-| 语音识别 | 只支持 macOS 13+；采的是 Dozin 整个应用的声音，用之前确认 Dozin 里只有目标直播间在出声 |
+| 主播语音转文字 | 扩展自带识别还在开发（design.md #8.2）。现在要语音转文字得用 `kit/`：只支持 macOS 13+，采的是 Dozin 整个应用的声音，用之前确认 Dozin 里只有目标直播间在出声 |
+
+从 v0.1.0 升级：扩展从 `douyin-live` 改名为 `audience-bot`，人格文件也换到 `connectors/audience-bot/Agent.md`。旧扩展 `douyin-live` 不会自动删，在 设置 › Extensions 卸掉它；旧人格要沿用，把 `connectors/douyin-live/Agent.md` 的内容复制过去。
 
 ## 安装
 
