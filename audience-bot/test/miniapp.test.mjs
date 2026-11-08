@@ -63,7 +63,7 @@ test('loads the file, saves with the stamp it read, and ignores the change its o
   const view = mount(p.document, sdk, { clipboard: { writeText: async () => {} } })
   await view.ready
   assert.equal(p.el('audience-bot__persona-text').value, '旧人格')
-  assert.equal(p.el('audience-bot__persona-path').textContent, '/home/u/.dozin/connectors/douyin-live/Agent.md')
+  assert.equal(p.el('audience-bot__persona-path').textContent, '/home/u/.dozin/connectors/audience-bot/Agent.md')
   assert.equal(p.el('audience-bot__persona-state').textContent, '已保存')
   assert.equal(p.el('audience-bot__save').disabled, true)
 
@@ -72,7 +72,7 @@ test('loads the file, saves with the stamp it read, and ignores the change its o
   assert.equal(p.el('audience-bot__save').disabled, false)
   p.click('audience-bot__save')
   await settle()
-  assert.deepEqual(sdk.writes, [{ dir: 'douyin-live', value: '新人格', stamp: 'v0' }])
+  assert.deepEqual(sdk.writes, [{ dir: 'audience-bot', value: '新人格', stamp: 'v0' }])
   assert.equal(sdk.file.content, '新人格')
   assert.equal(p.el('audience-bot__persona-state').textContent, '已保存')
 
@@ -153,8 +153,8 @@ test('over 16 KB is flagged but can still be saved; copies carry the file path; 
   p.click('audience-bot__copy-example')
   await settle()
   assert.deepEqual(copied, [
-    '/home/u/.dozin/connectors/douyin-live/Agent.md',
-    `${EXAMPLE}（人格文件：/home/u/.dozin/connectors/douyin-live/Agent.md）`
+    '/home/u/.dozin/connectors/audience-bot/Agent.md',
+    `${EXAMPLE}（人格文件：/home/u/.dozin/connectors/audience-bot/Agent.md）`
   ])
 })
 

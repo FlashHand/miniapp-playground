@@ -24,8 +24,10 @@ Audience BOT 让 Dozin 里的一个 AI 对话接管抖音直播间：弹幕和�
 
 ## 安装
 
-1. `git clone https://github.com/FlashHand/audience-bot.git`
-2. **小程序和扩展**：在 Dozin 对话里说「安装小程序 <clone 的目录>/miniapp」。小程序和它带的扩展一起装上（Dozin 的 `miniapp_install`）；然后在 设置 › Extensions 批准并打开扩展 `douyin-live`。
+最简单：在 Dozin 对话里说「按 https://github.com/FlashHand/miniapp-playground 的 README 安装 Audience BOT」，AI 照仓库根目录 README 的步骤装好小程序、扩展和技能，剩下批准扩展这一步由你点。手动装：
+
+1. `git clone https://github.com/FlashHand/miniapp-playground.git`，本包在其中的 `audience-bot/`。
+2. **小程序和扩展**：在 Dozin 对话里说「安装小程序 <clone 的目录>/audience-bot/miniapp」。小程序和它带的扩展一起装上（Dozin 的 `miniapp_install`）；然后在 设置 › Extensions 批准并打开扩展 `audience-bot`。
 3. **技能和语音识别**（要主播语音时）：在 macOS 上运行 `kit/install.sh`（需要 Xcode Command Line Tools 和 cmake），它会编译识别器、下载并校验模型、签名采音 App，并把技能装进 Dozin 的技能目录。只要弹幕不要语音时，可以只把 `skill/douyin-live-reply/` 复制到 `~/.dozin/skills/`。
 4. **打包**（可选）：`yarn install && yarn pack:miniapp` 生成 `dist/io.github.flashhand.audience-bot-<version>.asar`，里面同样含扩展。
 

@@ -6,8 +6,8 @@
 
 | 部分 | 目录 | 做什么 | 装到哪里 |
 |---|---|---|---|
-| 扩展 `douyin-live` | `miniapp/extension/` | 在直播间标签页里收弹幕、读主播语音、发回复；注册一个带 `chat` 的 Gateway connector | `<home>/extensions/packages/douyin-live/`：安装小程序时一起装，再在 设置 › Extensions 批准、打开 |
-| 小程序 `io.github.flashhand.audience-bot` | `miniapp/` | 人格页：编辑 `connectors/douyin-live/Agent.md`，提示也可以和 AI 聊天来改 | `<home>/miniapps/io.github.flashhand.audience-bot/<version_code>.asar` |
+| 扩展 `audience-bot` | `miniapp/extension/` | 在直播间标签页里收弹幕、读主播语音、发回复；注册一个带 `chat` 的 Gateway connector | `<home>/extensions/packages/audience-bot/`：安装小程序时一起装，再在 设置 › Extensions 批准、打开 |
+| 小程序 `io.github.flashhand.audience-bot` | `miniapp/` | 人格页：编辑 `connectors/audience-bot/Agent.md`，提示也可以和 AI 聊天来改 | `<home>/miniapps/io.github.flashhand.audience-bot/<version_code>.asar` |
 | 技能 `douyin-live-reply` | `skill/douyin-live-reply/` | 教 Dozin 的 AI 接管一个直播间：写 `target.json`、请人允许标签页、接入对话、写人格 | `<home>/skills/douyin-live-reply/`（`kit/install.sh` 安装） |
 | 本机语音识别 | `kit/` | macOS 采音 App（只采 Dozin 的应用音轨）+ whisper.cpp 识别桥，把主播的话写成 `continuous-state.json` | 运行目录 `~/.dozin-live-caption/` |
 
@@ -22,7 +22,7 @@ miniapp/extension/
   room.mjs       注入直播间页面的三个 injection：showPanel（监控面板，#7）、observeRoom（观察弹幕）、sendInRoom（发一条弹幕并核对回显）；addToPanel 供扩展把主播语音加进面板
 ```
 
-扩展在小程序包里：`miniapp/miniapp.json` 的 `"extension": "extension"` 指向它，Dozin 的 `miniapp_install` 先把它装进 `<home>/extensions/packages/douyin-live/`（照旧要人批准才运行），再复制小程序（不含扩展目录）；卸载小程序时扩展一起卸掉（Dozin `docs/features/miniapp-extension.md`）。两者运行时不直接通信，只靠目录名 `douyin-live` 对上：扩展注册时 Dozin 用包名建 `connectors/douyin-live/`，人格页按这个名字读写。
+扩展在小程序包里：`miniapp/miniapp.json` 的 `"extension": "extension"` 指向它，Dozin 的 `miniapp_install` 先把它装进 `<home>/extensions/packages/audience-bot/`（照旧要人批准才运行），再复制小程序（不含扩展目录）；卸载小程序时扩展一起卸掉（Dozin `docs/features/miniapp-extension.md`）。两者运行时不直接通信，只靠目录名 `audience-bot` 对上：扩展注册时 Dozin 用包名建 `connectors/audience-bot/`，人格页按这个名字读写。
 
 ## #2 Dozin 需要提供的能力
 
@@ -50,9 +50,9 @@ MAESTROSDK.connectors.onAgentMdChange(cb: ({ dir, stamp }) => void): () => void
 
 | 文件（在 `<home>/` 下） | 谁写 | 谁读 |
 |---|---|---|
-| `connectors/douyin-live/Agent.md` | Dozin 第一次建；之后是人格页、AI、人 | Gateway 每轮读进接入对话的系统提示；人格页 |
-| `connectors/douyin-live/connector.json` | Dozin，每次注册 | Dozin |
-| `extensions/data/douyin-live/target.json` | 技能（AI），接管或换房间时：`{ tabId, room, ownName, voiceFile }` | 扩展，每秒一次 |
+| `connectors/audience-bot/Agent.md` | Dozin 第一次建；之后是人格页、AI、人 | Gateway 每轮读进接入对话的系统提示；人格页 |
+| `connectors/audience-bot/connector.json` | Dozin，每次注册 | Dozin |
+| `extensions/data/audience-bot/target.json` | 技能（AI），接管或换房间时：`{ tabId, room, ownName, voiceFile }` | 扩展，每秒一次 |
 | `~/.dozin-live-caption/runtime/continuous-state.json` | 语音识别程序 | 扩展（路径来自 `voiceFile`） |
 
 ## #4 人格页
@@ -68,12 +68,12 @@ MAESTROSDK.connectors.onAgentMdChange(cb: ({ dir, stamp }) => void): () => void
 
 | 链路 | 经过 |
 |---|---|
-| 接管 | 人说「接管这个直播间」→ 技能写 `target.json` → 人在 设置 › Extensions 允许标签页 → `gateway_attach douyin-live` |
+| 接管 | 人说「接管这个直播间」→ 技能写 `target.json` → 人在 设置 › Extensions 允许标签页 → `gateway_attach audience-bot` |
 | 收弹幕 | `room.mjs` 的 `observeRoom` → 扩展 `ctx.emit` → Gateway 分批 → 对话里的 `<gateway_messages>` |
 | 收语音 | 语音识别 → `continuous-state.json` → 扩展（`role: host`，`modality: voice`）→ 同上 |
 | 回复 | AI `gateway_send` → Gateway → 扩展 `send` → `sendInRoom` 填字、发送、5 秒内在列表里看到原文才算 `verified` |
 | 监控面板 | 弹幕由 `observeRoom` 、AI 回复由 `sendInRoom`（核对成功后）在页面里直接加进面板；主播语音由扩展用 `evaluate` 调 `addToPanel` 加进去（#7） |
-| 停止 | `gateway_detach douyin-live`；扩展在 设置 › Extensions 关掉；删掉 `target.json` 放开标签页 |
+| 停止 | `gateway_detach audience-bot`；扩展在 设置 › Extensions 关掉；删掉 `target.json` 放开标签页 |
 
 ## #6 打包与版本
 

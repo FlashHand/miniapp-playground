@@ -1,4 +1,4 @@
-// Contract: docs/design.md — the douyin-live package: its manifest, the comment observer and the send step on a fake
+// Contract: docs/design.md — the audience-bot package: its manifest, the comment observer and the send step on a fake
 // room page, and the connector's cycle (target.json → take the tab → comments and voice → replies).
 import test from 'node:test'
 import assert from 'node:assert/strict'
@@ -40,7 +40,7 @@ const withPage = async (page, globals, run) => {
 test('the package needs only its name and the browser capability; its connector has a chat and a short system prompt', async () => {
   assert.deepEqual(readdirSync(packageDir).sort(), ['index.mjs', 'package.json', 'room.mjs', 'voice.mjs'])
   const manifest = JSON.parse(readFileSync(new URL('package.json', packageDir), 'utf8'))
-  assert.equal(manifest.name, 'douyin-live', 'the connectors directory is named after the package')
+  assert.equal(manifest.name, 'audience-bot', 'the connectors directory is named after the package')
   assert.equal(manifest.main, undefined, 'the entry falls back to index.mjs')
   assert.equal(manifest.pi, undefined)
   assert.deepEqual(manifest.dozin.capabilities, ['browser', 'audio'])
@@ -109,7 +109,7 @@ test('reply text: @nickname in front only for a viewer and only when it fits', (
 })
 
 test('connector: waits for target.json, takes the tab, emits comments and new voice lines, sends once per key, lets go', async (t) => {
-  const dir = mkdtempSync(join(tmpdir(), 'douyin-live-'))
+  const dir = mkdtempSync(join(tmpdir(), 'audience-bot-'))
   const cwd = process.cwd()
   process.chdir(dir)
   t.after(() => process.chdir(cwd))

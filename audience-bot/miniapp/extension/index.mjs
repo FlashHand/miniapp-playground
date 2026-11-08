@@ -1,4 +1,4 @@
-// douyin-live: a Douyin live room as a Dozin Gateway connector with `chat` (docs/design.md in this repository).
+// audience-bot: a Douyin live room as a Dozin Gateway connector with `chat` (docs/design.md in this repository).
 // Comments come from an observer in the room tab, the host's voice from the caption program's snapshot file; both go
 // to the Gateway, which puts them into the chat attached to this connector. The chat's replies come back to `send`.
 // With `voice: "tab"` the extension captures the room tab's own audio instead (docs/design.md #8; step 1: measured only).

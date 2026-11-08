@@ -1,5 +1,5 @@
 {
-  "name": "douyin-live",
+  "name": "audience-bot",
   "description": "抖音直播间：弹幕和主播语音进入接入它的 Dozin 对话，对话 AI 的回复作为弹幕发出。",
   "dozin": {
     "capabilities": [

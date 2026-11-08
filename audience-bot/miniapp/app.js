@@ -1,10 +1,10 @@
-// Audience BOT persona page (docs/design.md #4): edits the Agent.md of the douyin-live connector through
+// Audience BOT persona page (docs/design.md #4): edits the Agent.md of the audience-bot connector through
 // MAESTROSDK.connectors. The page and the AI may edit the same file: every save carries the stamp it read, and a change
 // made elsewhere is either loaded (nothing unsaved here) or offered as a choice (unsaved edits here). Nothing is
 // overwritten silently.
 
-/** The connectors directory the douyin-live extension registers under (its package name). */
-export const CONNECTOR_DIR = 'douyin-live';
+/** The connectors directory the audience-bot extension registers under (its package name). */
+export const CONNECTOR_DIR = 'audience-bot';
 export const EXAMPLE = '把Audience BOT 的人格改得更活泼一点，多跟观众互动';
 /** Step 2: what the person says in the chat beside the live room (the douyin-live-reply skill takes it from there). */
 export const TAKEOVER = '接管这个抖音直播间';
