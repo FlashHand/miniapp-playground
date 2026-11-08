@@ -1,11 +1,11 @@
 // audience-bot: a Douyin live room as a Dozin Gateway connector with `chat` (docs/design.md in this repository).
 // Comments come from an observer in the room tab, the host's voice from the caption program's snapshot file; both go
 // to the Gateway, which puts them into the chat attached to this connector. The chat's replies come back to `send`.
-// With `voice: "tab"` the extension captures the room tab's own audio instead (docs/design.md #8; step 1: measured only).
+// With `voice: "tab"` Dozin recognises the room tab's own audio (docs/design.md #8.2); `voice: "check"` only measures it (#8.1).
 import { readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { addToPanel, observeRoom, sendInRoom, setPanelStatus, showPanel } from './room.mjs'
-import { startTabVoice } from './voice.mjs'
+import { startTabSpeech, startTabVoice } from './voice.mjs'
 
 const SYSTEM_PROMPT = [
   '你在抖音直播间里替这个账号回弹幕。',
@@ -34,7 +34,7 @@ const readTarget = async () => {
       room: String(raw.room),
       ownName: typeof raw.ownName === 'string' ? raw.ownName : '',
       voiceFile: typeof raw.voiceFile === 'string' && raw.voiceFile ? raw.voiceFile : '',
-      voice: raw.voice === 'tab' ? 'tab' : ''
+      voice: raw.voice === 'tab' || raw.voice === 'check' ? raw.voice : ''
     }
   } catch {
     return undefined
@@ -63,23 +63,32 @@ export function activate(dozin) {
   let voiceSince = 0
   const voiceSeen = new Set()
   const results = new Map()
-  /** The room tab's audio capture (#8.1); `voiceBlocked` holds a failure that waits for a new target or takeover. */
+  /** The room tab's recognition (#8.2) or audio check (#8.1); `voiceBlocked` holds a failure that waits for a new target or takeover. */
   let voice
   let voiceRetryAt = 0
   let voiceBlocked = ''
+  /** Last failure logged, so a retry every few seconds logs a reason once. */
+  let voiceLastCode = ''
 
   const stopVoice = async () => {
     const current = voice
     voice = undefined
     voiceRetryAt = 0
     voiceBlocked = ''
+    voiceLastCode = ''
     await current?.stop()
   }
 
-  const ensureVoice = () => {
+  /** One host sentence: into the chat and onto the panel (the panel only shows it). */
+  const hostSentence = ({ text, seq, at, streamId }) => {
+    ctx?.emit({ text, msgId: `voice-${streamId}-${seq}`, senderName: '主播', role: 'host', modality: 'voice', at })
+    if (room) void ctx?.browser.evaluate(room.tabId, { source: addToPanel.toString(), args: { items: [{ role: 'host', text, at }] } }).catch(() => {})
+  }
+
+  const ensureVoice = (mode) => {
     if (voice || voiceBlocked || Date.now() < voiceRetryAt) return
     const tabId = room.tabId
-    const current = startTabVoice({
+    const common = {
       browser: ctx.browser,
       tabId,
       log: (text) => ctx?.log(text),
@@ -87,10 +96,13 @@ export function activate(dozin) {
       onEnd: ({ retry, code }) => {
         if (voice !== current) return
         voice = undefined
+        if (code !== voiceLastCode) ctx?.log(`voice: ${code}${retry ? ', retrying' : ''}`)
+        voiceLastCode = code
         if (retry) voiceRetryAt = Date.now() + VOICE_RETRY_MS
         else voiceBlocked = code
       }
-    })
+    }
+    const current = mode === 'check' ? startTabVoice(common) : startTabSpeech({ ...common, onSentence: hostSentence })
     voice = current
   }
 
@@ -167,7 +179,7 @@ export function activate(dozin) {
       }
       if (!target) return
       if (!room) await adopt(target)
-      if (room && target.voice === 'tab') ensureVoice()
+      if (room && target.voice) ensureVoice(target.voice)
       else if (room && target.voiceFile) await readVoice(target.voiceFile)
     } catch (error) {
       ctx.log(`tick failed: ${error?.code || error?.message || 'error'}`)

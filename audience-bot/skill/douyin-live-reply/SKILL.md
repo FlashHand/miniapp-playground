@@ -26,12 +26,41 @@ description: >-
 写 `<home>/extensions/data/audience-bot/target.json`：
 
 ```json
-{ "tabId": "tab-28", "room": "123456789012", "ownName": "<本账号的显示名>", "voiceFile": "~/.dozin-live-caption/runtime/continuous-state.json" }
+{ "tabId": "tab-28", "room": "123456789012", "ownName": "<本账号的显示名>", "voice": "tab" }
 ```
 
-- `voiceFile` 只在要主播语音时写：先按 [references/local-runtime.md](references/local-runtime.md) 确认采音程序和识别桥在跑、快照在更新（由仓库 `kit/` 的脚本启动，不在本对话里起）。路径写绝对路径（把 `~` 展开）。采音范围是整个应用音轨，先请用户确认 Dozin 里只有这个直播在出声。不要语音就不写这一项。
-- 采音自检（Ral 2026-11-08 选按标签页采音，第一步）：用户要试时在 `target.json` 加 `"voice": "tab"`，这时不读 `voiceFile`。扩展只采这个标签页的声音、每秒在直播间左下角面板写一行「采音：本标签页 · 音量 … dB / 静音」，还不识别、不进对话。请用户按设计 #8.1 的五项看：有声时音量跳动、另一个标签页出声时这里仍静音、直播声音照常外放、不弹录屏权限、刷新后接着采。面板写「采音失败：…」时把原因告诉用户。
+- `"voice": "tab"`：主播语音由 Dozin 在本机识别，只听这个标签页，不用 kit、不要录屏权限。要先有语音模型：没有时直播间左下角面板写「主播语音：语音模型未下载」，按第 1.1 步下载；下好后扩展自动开始识别，面板写「主播语音：<模型名> · 识别中」。不要语音就不写 `voice`。
+- 采音自检：用户要试采音时把 `voice` 写成 `"check"`。扩展只采这个标签页的声音、每秒在面板写一行「采音：本标签页 · 音量 … dB / 静音」，不识别、不进对话。请用户按设计 #8.1 的五项看：有声时音量跳动、另一个标签页出声时这里仍静音、直播声音照常外放、不弹录屏权限、刷新后接着采。面板写「采音失败：…」或「主播语音：…」的原因时告诉用户。
+- 旧方式 `voiceFile`（Dozin 没有语音识别时）：先按 [references/local-runtime.md](references/local-runtime.md) 确认采音程序和识别桥在跑、快照在更新（由仓库 `kit/` 的脚本启动，不在本对话里起），写 `"voiceFile": "<快照的绝对路径>"`。采音范围是整个应用音轨，先请用户确认 Dozin 里只有这个直播在出声。写了 `voice` 时不读 `voiceFile`。
 - 扩展每秒读这个文件，内容变了就换目标。
+
+## 1.1 下载语音模型
+
+用户说「下载 Audience BOT 的语音模型」时照做。接管时发现没有模型（面板或人格页写「未下载」），先告诉用户要下载约 880 MB，用户同意再下。只从下面的 OSS 地址下载；只支持 macOS Apple 芯片。
+
+模型放在 `<home>/speech-models/`。先放 `.download/`、核对 sha256、解压到 `.download/`，再把整个目录 `mv` 过去。Dozin 看这个目录给出下载进度，用户在小程序 Audience BOT 的「主播语音」卡里能看到百分比。用后台任务跑（`run_in_background`），不要在对话里轮询；把 `<home>` 换成实际路径。
+
+```bash
+H="<home>/speech-models"; D="$H/.download"
+B=https://dozin-public-assets.oss-cn-hangzhou.aliyuncs.com/models/speech-models/sherpa-onnx
+A=sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25   # 878702423 B
+mkdir -p "$D" || exit 1
+if [ "$(stat -f%z "$H/silero_vad.onnx" 2>/dev/null)" != 643854 ]; then
+  curl -fL --retry 3 -C - -o "$D/silero_vad.onnx" "$B/silero_vad.onnx" || exit 1
+  [ "$(shasum -a 256 "$D/silero_vad.onnx" | cut -d' ' -f1)" = 9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6 ] || { rm -f "$D/silero_vad.onnx"; echo "silero_vad checksum mismatch"; exit 1; }
+  mv "$D/silero_vad.onnx" "$H/silero_vad.onnx"
+fi
+if [ ! -d "$H/$A" ]; then
+  curl -fL --retry 3 -C - -o "$D/$A.tar.bz2" "$B/$A.tar.bz2" || exit 1
+  [ "$(shasum -a 256 "$D/$A.tar.bz2" | cut -d' ' -f1)" = 393f8a14e2f5fb96746aaab342997a40641001fbd5bf9592a080a8329178ee96 ] || { rm -f "$D/$A.tar.bz2"; echo "model checksum mismatch"; exit 1; }
+  rm -rf "$D/$A" && tar -xjf "$D/$A.tar.bz2" -C "$D" --exclude '*/test_wavs' && mv "$D/$A" "$H/$A" && rm -f "$D/$A.tar.bz2" || exit 1
+fi
+echo "speech model ready: $A"
+```
+
+- 校验失败就停下告诉用户，不要改用别的下载地址。中断后重跑同一段会接着下。
+- 内存小或只想要小模型时，可改下 SenseVoice：`A=sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17`（163002883 B，sha256 `7d1efa2138a65b0b488df37f8b89e3d91a60676e416f515b952358d83dfd347e`）。两个都在时 Dozin 用 Qwen3-ASR。
+- 下完告诉用户：直播间里写了 `"voice": "tab"` 的话几秒内自动开始识别。
 
 ## 2. 允许标签页
 

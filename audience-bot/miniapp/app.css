@@ -111,3 +111,23 @@ body {
 .ai-hint__title { font-weight: 600; }
 .ai-hint__example { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
 .ai-hint__copy-example { color: var(--tint-ink); }
+
+/* "主播语音" card (docs/design.md #8.2): model rows with a progress bar; no borders. */
+.speech-card { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 8px; background: var(--card); }
+.speech-card__head { display: flex; align-items: center; gap: 8px; }
+.speech-card__title { font-weight: 600; }
+.speech-card__spacer { flex: 1; }
+.speech-card__active { color: var(--tint-ink); }
+.speech-card__note { color: var(--hint); }
+.speech-card__note[hidden], .speech-card__download[hidden] { display: none; }
+.speech-card__models { display: flex; flex-direction: column; gap: 6px; padding: 0; list-style: none; }
+.speech-card__model { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; align-items: center; }
+.speech-card__model-name { min-width: 0; }
+.speech-card__model--selected .speech-card__model-name { font-weight: 600; }
+.speech-card__model-state { color: var(--hint); font-variant-numeric: tabular-nums; }
+.speech-card__progress { grid-column: 1 / -1; height: 4px; border-radius: 2px; background: var(--muted-bg); overflow: hidden; }
+.speech-card__progress-fill { display: block; height: 100%; border-radius: 2px; background: var(--primary); }
+.speech-card__model--missing .speech-card__progress { display: none; }
+.speech-card__model--ready .speech-card__progress-fill { background: var(--tint-ink); }
+.speech-card__download { color: var(--ink); }
+.speech-card__copy { vertical-align: middle; }

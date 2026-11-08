@@ -3,6 +3,8 @@
 // made elsewhere is either loaded (nothing unsaved here) or offered as a choice (unsaved edits here). Nothing is
 // overwritten silently.
 
+import { mountSpeech } from './speech.js';
+
 /** The connectors directory the audience-bot extension registers under (its package name). */
 export const CONNECTOR_DIR = 'audience-bot';
 export const EXAMPLE = '把Audience BOT 的人格改得更活泼一点，多跟观众互动';
@@ -221,4 +223,7 @@ export function mount(doc, sdk, { clipboard, storage } = {}) {
   return { state, ready, save, load };
 }
 
-if (typeof document !== 'undefined') mount(document, globalThis.MAESTROSDK);
+if (typeof document !== 'undefined') {
+  mount(document, globalThis.MAESTROSDK);
+  mountSpeech(document, globalThis.MAESTROSDK);
+}

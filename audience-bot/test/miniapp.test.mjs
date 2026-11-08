@@ -189,3 +189,62 @@ test('the install guide opens the mini app and never connects it to the Gateway'
   assert.doesNotMatch(guide, /gateway_attach|gateway_register/)
   assert.match(guide, /不要替用户批准/)
 })
+
+// docs/design.md #8.2: the "主播语音" card on a fake MAESTROSDK.speech.
+const { mountSpeech, speechView, DOWNLOAD_SENTENCE } = await import('../miniapp/speech.js')
+const QWEN = { id: 'qwen3-asr-0.6b', name: 'Qwen3-ASR 0.6B', bytes: 878702423 }
+const SENSE = { id: 'sensevoice-small', name: 'SenseVoice Small', bytes: 163002883 }
+const VAD_READY = { bytes: 643854, state: 'ready' }
+const speechStatus = (models, extra = {}) => ({ supported: true, root: '/h/speech-models', vad: VAD_READY, models, selected: null, active: null, ...extra })
+
+test('speech card: downloading shows percent and MB; nothing ready and nothing downloading offers the download sentence', () => {
+  const downloading = speechView(speechStatus([{ ...QWEN, state: 'downloading', received: 439351212 }, { ...SENSE, state: 'missing' }]))
+  assert.deepEqual(downloading.rows.map((row) => row.text), ['下载中 50%（439 / 879 MB）', '未下载（163 MB）'])
+  assert.equal(downloading.rows[0].percent, 50)
+  assert.equal(downloading.download, false, 'no sentence while a download is on its way')
+  const missing = speechView(speechStatus([{ ...QWEN, state: 'missing' }, { ...SENSE, state: 'missing' }], { vad: { bytes: 643854, state: 'missing' } }))
+  assert.equal(missing.download, true)
+  assert.deepEqual(missing.rows.map((row) => row.name), ['Qwen3-ASR 0.6B', 'SenseVoice Small', '断句模型'], 'the sentence-cutting model shows while it is not ready')
+  assert.equal(speechView(speechStatus([{ ...QWEN, state: 'installing' }, { ...SENSE, state: 'missing' }])).rows[0].text, '解压中')
+})
+
+test('speech card: the model in use and the one that will be used', () => {
+  const running = speechView(speechStatus([{ ...QWEN, state: 'ready' }, { ...SENSE, state: 'ready' }], { selected: QWEN.id, active: { modelId: QWEN.id, modelName: QWEN.name, state: 'running', streams: 1 } }))
+  assert.equal(running.active, '使用中：Qwen3-ASR 0.6B · 1 个直播间')
+  assert.deepEqual(running.rows.map((row) => row.selected), [true, false])
+  assert.equal(speechView(speechStatus([{ ...QWEN, state: 'ready' }], { selected: QWEN.id })).active, '将使用：Qwen3-ASR 0.6B')
+  assert.equal(speechView(speechStatus([{ ...QWEN, state: 'ready' }], { selected: QWEN.id, active: { modelId: QWEN.id, modelName: QWEN.name, state: 'loading', streams: 1 } })).active, '加载中：Qwen3-ASR 0.6B')
+  assert.match(speechView(speechStatus([], { supported: false })).note, /macOS Apple 芯片/)
+  assert.match(speechView(null, { available: false }).note, /MAESTROSDK\.speech/)
+})
+
+test('speech card: renders the status, follows changes, copies the download sentence; an older Dozin only shows a note', async () => {
+  const p = page()
+  let listener
+  const copied = []
+  const sdk = { speech: {
+    status: async () => speechStatus([{ ...QWEN, state: 'missing' }, { ...SENSE, state: 'missing' }]),
+    onStatusChange: (fn) => { listener = fn; return () => {} }
+  } }
+  const card = mountSpeech(p.document, sdk, { clipboard: { writeText: async (text) => copied.push(text) } })
+  await card.ready
+  assert.equal(p.el('audience-bot__speech-download').hidden, false)
+  assert.equal(p.el('audience-bot__speech-download-text').textContent, DOWNLOAD_SENTENCE)
+  p.click('audience-bot__copy-download')
+  await settle()
+  assert.deepEqual(copied, [DOWNLOAD_SENTENCE])
+  listener(speechStatus([{ ...QWEN, state: 'downloading', received: 87870243 }, { ...SENSE, state: 'missing' }]))
+  const rows = [...p.document.querySelectorAll('[name="audience-bot__speech-model"]')]
+  assert.equal(rows[0].dataset.model, QWEN.id)
+  assert.ok(rows[0].textContent.includes('下载中 10%'))
+  assert.ok(rows[0].querySelector('.speech-card__progress-fill').style.width === '10%')
+  assert.equal(p.el('audience-bot__speech-download').hidden, true)
+  listener(speechStatus([{ ...QWEN, state: 'ready' }, { ...SENSE, state: 'missing' }], { selected: QWEN.id, active: { modelId: QWEN.id, modelName: QWEN.name, state: 'running', streams: 1 } }))
+  assert.equal(p.el('audience-bot__speech-active').textContent, '使用中：Qwen3-ASR 0.6B · 1 个直播间')
+  assert.ok(p.document.querySelector('[data-model="qwen3-asr-0.6b"]').textContent.startsWith('Qwen3-ASR 0.6B（默认）已就绪'))
+
+  const old = page()
+  await mountSpeech(old.document, { connectors: {} }).ready
+  assert.equal(old.el('audience-bot__speech-note').hidden, false)
+  assert.equal(old.document.querySelectorAll('[name="audience-bot__speech-model"]').length, 0)
+})

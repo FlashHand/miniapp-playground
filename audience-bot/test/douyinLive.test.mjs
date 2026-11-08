@@ -9,7 +9,7 @@ import { parseHTML } from 'linkedom'
 
 const packageDir = new URL('../miniapp/extension/', import.meta.url)
 const { addToPanel, observeRoom, sendInRoom, setPanelStatus, showPanel } = await import(new URL('room.mjs', packageDir))
-const { FLOOR_DB, failureText, levelDb, levelText, startTabVoice } = await import(new URL('voice.mjs', packageDir))
+const { DOWNLOAD_SENTENCE, FLOOR_DB, failureText, levelDb, levelText, speechFailureText, startTabSpeech, startTabVoice } = await import(new URL('voice.mjs', packageDir))
 const { activate, replyText } = await import(new URL('index.mjs', packageDir))
 
 const settle = async () => { for (let i = 0; i < 10; i++) await new Promise((done) => setImmediate(done)) }
@@ -335,7 +335,7 @@ test('panel: the status line shows, hides when empty, and stays when the list is
   })
 })
 
-test('connector: voice "tab" captures the taken tab, writes the panel line, skips the voice file, stops on release', async (t) => {
+test('connector: voice "check" captures the taken tab, writes the panel line, skips the voice file, stops on release', async (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'douyin-voice-'))
   const cwd = process.cwd()
   process.chdir(dir)
@@ -354,7 +354,7 @@ test('connector: voice "tab" captures the taken tab, writes the panel line, skip
     onEvent(fn) { listener = fn; return () => { listener = undefined } }
   }
   writeFileSync(join(dir, 'continuous-state.json'), JSON.stringify({ messages: [{ id: 'v1', text: '文件里的句子', at: Date.now() + 10 }] }))
-  writeFileSync(join(dir, 'target.json'), JSON.stringify({ tabId: 'tab-28', room: '123456789012', ownName: '我', voice: 'tab', voiceFile: join(dir, 'continuous-state.json') }))
+  writeFileSync(join(dir, 'target.json'), JSON.stringify({ tabId: 'tab-28', room: '123456789012', ownName: '我', voice: 'check', voiceFile: join(dir, 'continuous-state.json') }))
   const emits = []
   definition.start({ browser, emit: (message) => emits.push(message), log() {} })
   await settle()
@@ -369,5 +369,98 @@ test('connector: voice "tab" captures the taken tab, writes the panel line, skip
   await new Promise((done) => setTimeout(done, 1100))
   const order = calls.map((call) => call[0])
   assert.ok(order.lastIndexOf('stop') < order.lastIndexOf('release'), 'the capture stops before the tab is let go')
+  await definition.stop()
+})
+
+// docs/design.md #8.2: Dozin recognises the room tab; the extension gets sentences, never audio.
+const fakeSpeech = (sentences, { fail, reason = 'closed' } = {}) => {
+  const calls = []
+  let release
+  const done = new Promise((resolve) => { release = resolve })
+  return {
+    calls,
+    finish: () => release({ reason, dropped: 0 }),
+    browser: {
+      async transcribe(tabId) {
+        calls.push(['transcribe', tabId])
+        if (fail) throw Object.assign(new Error(fail), { code: fail })
+        return {
+          tabId, streamId: 'speech-1', modelId: 'qwen3-asr-0.6b', modelName: 'Qwen3-ASR 0.6B',
+          sentences: { async *[Symbol.asyncIterator]() { for (const sentence of sentences) yield sentence; await done } },
+          ended: done,
+          async stop() { calls.push(['stop', tabId]); release({ reason: 'stopped', dropped: 0 }) }
+        }
+      }
+    }
+  }
+}
+
+test('speech: no model, downloading and an older Dozin each say so; only an older Dozin or platform stops the retries', async () => {
+  for (const [code, retry, words] of [['speech_model_missing', true, DOWNLOAD_SENTENCE], ['speech_model_downloading', true, '下载中'], ['audio_platform_unsupported', false, 'Apple 芯片']]) {
+    const status = [], ends = []
+    startTabSpeech({ browser: fakeSpeech([], { fail: code }).browser, tabId: 'tab-28', setStatus: (text) => status.push(text), log() {}, onSentence() {}, onEnd: (detail) => ends.push(detail) })
+    await settle()
+    assert.ok(status.at(-1).includes(words), `${code}: ${status.at(-1)}`)
+    assert.deepEqual(ends, [{ retry, code }])
+  }
+  const ends = []
+  startTabSpeech({ browser: {}, tabId: 'tab-28', setStatus() {}, log() {}, onSentence() {}, onEnd: (detail) => ends.push(detail) })
+  await settle()
+  assert.deepEqual(ends, [{ retry: false, code: 'speech_not_supported' }])
+  assert.equal(speechFailureText('speech_model_busy').startsWith('主播语音：'), true)
+})
+
+test('speech: sentences carry wall-clock time and the stream id; the panel shows the model; ending by itself asks for a retry', async () => {
+  const speech = fakeSpeech([{ seq: 1, text: '欢迎', startMs: 0, endMs: 900 }, { seq: 2, text: '来点关注', startMs: 1200, endMs: 2500 }])
+  const status = [], got = [], ends = [], logs = []
+  startTabSpeech({ browser: speech.browser, tabId: 'tab-28', setStatus: (text) => status.push(text), log: (text) => logs.push(text), onSentence: (s) => got.push(s), onEnd: (detail) => ends.push(detail), now: () => 1000000 })
+  await settle()
+  assert.deepEqual(got, [{ text: '欢迎', seq: 1, at: 1000900, streamId: 'speech-1' }, { text: '来点关注', seq: 2, at: 1002500, streamId: 'speech-1' }])
+  assert.deepEqual(status, ['主播语音：正在启动…', '主播语音：Qwen3-ASR 0.6B · 识别中'])
+  assert.ok(logs.every((line) => !line.includes('欢迎')), 'logs never carry sentence text')
+  speech.finish()
+  await settle()
+  assert.deepEqual(ends, [{ retry: true, code: 'closed' }])
+})
+
+test('connector: voice "tab" puts host sentences into the chat and the panel, logs a waiting reason once, stops before letting go', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'douyin-speech-'))
+  const cwd = process.cwd()
+  process.chdir(dir)
+  t.after(() => process.chdir(cwd))
+  let definition
+  activate({ registerConnector: (value) => { definition = value }, log() {} })
+  let missing = true
+  const speech = fakeSpeech([{ seq: 1, text: '大家好', startMs: 0, endMs: 800 }])
+  const calls = speech.calls
+  const browser = {
+    async transcribe(tabId) {
+      if (missing) { calls.push(['transcribe-missing', tabId]); throw Object.assign(new Error('speech_model_missing'), { code: 'speech_model_missing' }) }
+      return speech.browser.transcribe(tabId)
+    },
+    async adoptTab(tabId) { calls.push(['adopt', tabId]); return { tabId, url: 'https://live.douyin.com/123456789012', documentId: 1 } },
+    async releaseTab(tabId) { calls.push(['release', tabId]) },
+    async inject(tabId, script) { calls.push(['inject', script.id]) },
+    async evaluate(tabId, script) { calls.push(['evaluate', script.args]); return true },
+    onEvent() { return () => {} }
+  }
+  writeFileSync(join(dir, 'target.json'), JSON.stringify({ tabId: 'tab-28', room: '123456789012', ownName: '我', voice: 'tab' }))
+  const emits = [], logs = []
+  definition.start({ browser, emit: (message) => emits.push(message), log: (text) => logs.push(text) })
+  await new Promise((done) => setTimeout(done, 1100))
+  assert.ok(calls.some((call) => call[0] === 'transcribe-missing'))
+  const panelLines = () => calls.filter((call) => call[0] === 'evaluate' && call[1]?.text).map((call) => call[1].text)
+  assert.ok(panelLines().some((text) => text.includes('语音模型未下载')))
+  assert.deepEqual(emits, [])
+  missing = false
+  await new Promise((done) => setTimeout(done, 3300))
+  assert.equal(logs.filter((line) => line.startsWith('voice: speech_model_missing')).length, 1, 'the waiting reason is logged once')
+  assert.deepEqual(emits.map(({ text, msgId, senderName, role, modality }) => ({ text, msgId, senderName, role, modality })), [{ text: '大家好', msgId: 'voice-speech-1-1', senderName: '主播', role: 'host', modality: 'voice' }])
+  assert.ok(calls.some((call) => call[0] === 'evaluate' && call[1]?.items?.[0]?.text === '大家好'), 'the sentence is on the panel too')
+  assert.ok(panelLines().includes('主播语音：Qwen3-ASR 0.6B · 识别中'))
+  writeFileSync(join(dir, 'target.json'), JSON.stringify({ tabId: 'tab-28', room: '123456789012', ownName: '我' }))
+  await new Promise((done) => setTimeout(done, 1100))
+  const order = calls.map((call) => call[0])
+  assert.ok(order.lastIndexOf('stop') >= 0 && order.lastIndexOf('stop') < order.lastIndexOf('release'), 'recognition stops before the tab is let go')
   await definition.stop()
 })
