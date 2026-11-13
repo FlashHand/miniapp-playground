@@ -1,5 +1,11 @@
 # audience-bot · 抖音直播间 AI 助手（Dozin）
 
+> **已停止更新（2026-11-14）。** 这里最后一版是 v0.2.0 加语音模型下载（提交 `25c4699`），之后不再改。新版本（v0.3.0 起，整包安装）在作者自己的库里开发，暂不公开发布。下面的安装步骤仍可用，装的就是这一版。
+>
+> 这一版对 Dozin 的要求和已知问题：
+> - 小程序里的「下载语音模型」按钮要 2026-11-13 之后打的 Dozin（Dozin Preview 0.0.258 起，扩展能注册和启动后台任务）。更早的 Dozin 里这个按钮不能点，页面会写明原因，弹幕收发照常。
+> - 技能 `douyin-live-reply` 把接管目标写到 `<home>/extensions/data/audience-bot/target.json`，而 2026-11-10 之后的 Dozin 让扩展读 `<home>/userdata/extensions/audience-bot/target.json`，照技能接管不会开始。在这样的 Dozin 上，接管时告诉 AI 把 `target.json` 写到 `userdata/extensions/audience-bot/` 下。这个问题在新版本里已改，这里不再修。
+
 ## Quick Start
 
 在 Dozin 任意对话里粘贴这一句，发出去：
