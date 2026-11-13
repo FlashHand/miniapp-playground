@@ -248,3 +248,177 @@ test('speech card: renders the status, follows changes, copies the download sent
   assert.equal(old.el('audience-bot__speech-note').hidden, false)
   assert.equal(old.document.querySelectorAll('[name="audience-bot__speech-model"]').length, 0)
 })
+
+// speech-model-002: no usable model → pick one of two (Qwen3 by default) and the extension's background task downloads it.
+const { startErrorText, EXTENSION_NAME, SPEECH_SERVICE } = await import('../miniapp/speech.js')
+const NO_MODEL = () => speechStatus([{ ...QWEN, state: 'missing' }, { ...SENSE, state: 'missing' }], { vad: { bytes: 643854, state: 'missing' } })
+const extensionWith = (service, extra = {}) => ({
+  ok: true,
+  extension: { name: 'audience-bot', version: '0.2.0', state: 'running', approval: 'approved', switchedOn: true, services: service ? [{ id: 'speech-model', name: '下载语音模型', start: 'manual', state: 'stopped', ...service }] : [], ...extra }
+})
+
+/** MAESTROSDK with speech and extensions; `ext` is what extensions.get answers now, `startResult` what startService answers. */
+const speechHost = ({ status = NO_MODEL(), ext = extensionWith({}), startResult = { ok: true }, startService = true } = {}) => {
+  const host = { status, ext, startResult, starts: [], gets: 0, listener: undefined }
+  host.sdk = {
+    speech: { status: async () => host.status, onStatusChange: (fn) => { host.listener = fn; return () => {} } },
+    extensions: {
+      get: async (name) => { host.gets++; return name === 'audience-bot' ? host.ext : { ok: false, error: 'not_owned' } },
+      ...(startService ? { startService: async (name, service, input) => { host.starts.push({ name, service, input }); return host.startResult } } : {})
+    }
+  }
+  return host
+}
+const radioState = (p) => [...p.document.querySelectorAll('[name="audience-bot__speech-choice"]')].map((radio) => `${radio.value}:${radio.checked ? 'on' : 'off'}${radio.disabled ? ':disabled' : ''}`)
+
+test('picker: no usable model shows two choices with Qwen3 picked; the button starts the task with the picked id', async () => {
+  const p = page()
+  const host = speechHost()
+  const card = mountSpeech(p.document, host.sdk, { pollMs: 0 })
+  await card.ready
+  assert.equal(p.el('audience-bot__speech-picker').hidden, false)
+  assert.deepEqual(radioState(p), ['qwen3-asr-0.6b:on', 'sensevoice-small:off'])
+  assert.equal(p.el('audience-bot__speech-start').disabled, false)
+  assert.equal(p.el('audience-bot__speech-start').textContent, '下载并初始化')
+  assert.equal(p.el('audience-bot__speech-download').hidden, true, 'the button works: no fallback sentence')
+  assert.equal(p.el('audience-bot__speech-picker-reason').hidden, true)
+
+  p.click('audience-bot__speech-start')
+  await settle()
+  assert.deepEqual(host.starts, [{ name: EXTENSION_NAME, service: SPEECH_SERVICE, input: { model: 'qwen3-asr-0.6b' } }])
+
+  // The person picks SenseVoice instead, on a fresh page.
+  const q = page()
+  const other = speechHost()
+  await mountSpeech(q.document, other.sdk, { pollMs: 0 }).ready
+  const sense = q.document.querySelector('[name="audience-bot__speech-choice"][value="sensevoice-small"]')
+  sense.checked = true
+  sense.dispatchEvent(new (parseHTML('<p></p>').window.Event)('change'))
+  assert.deepEqual(radioState(q), ['qwen3-asr-0.6b:off', 'sensevoice-small:on'])
+  q.click('audience-bot__speech-start')
+  await settle()
+  assert.deepEqual(other.starts.map((start) => start.input), [{ model: 'sensevoice-small' }])
+})
+
+test('picker: while downloading the button cannot be pressed and the progress shows; when it ends the picker goes away', async () => {
+  const p = page()
+  const host = speechHost()
+  const card = mountSpeech(p.document, host.sdk, { pollMs: 0 })
+  await card.ready
+  host.ext = extensionWith({ state: 'running', lastStatus: { text: '下载 Qwen3-ASR 0.6B：312 / 879 MB', level: 'info', at: 1, progress: { done: 312e6, total: 878702423 } } })
+  host.listener(speechStatus([{ ...QWEN, state: 'downloading', received: 312e6 }, { ...SENSE, state: 'missing' }]))
+  await settle()
+  assert.equal(p.el('audience-bot__speech-start').disabled, true)
+  assert.equal(p.el('audience-bot__speech-start').textContent, '下载中…')
+  assert.deepEqual(radioState(p), ['qwen3-asr-0.6b:on:disabled', 'sensevoice-small:off:disabled'])
+  assert.equal(p.el('audience-bot__speech-picker-status').textContent, '下载 Qwen3-ASR 0.6B：312 / 879 MB')
+  assert.ok(p.document.querySelector('[data-model="qwen3-asr-0.6b"]').textContent.includes('下载中 35%'))
+  p.click('audience-bot__speech-start')
+  await settle()
+  assert.equal(host.starts.length, 0, 'no second download')
+
+  // Unpacking: no download file growing, the task still runs.
+  host.ext = extensionWith({ state: 'running', lastStatus: { text: '解压中：Qwen3-ASR 0.6B', level: 'info', at: 2 } })
+  host.listener(speechStatus([{ ...QWEN, state: 'installing' }, { ...SENSE, state: 'missing' }]))
+  await settle()
+  assert.equal(p.el('audience-bot__speech-start').disabled, true)
+  assert.equal(p.el('audience-bot__speech-picker-status').textContent, '解压中：Qwen3-ASR 0.6B')
+
+  // Ready: Dozin selects it and the picker is gone.
+  host.ext = extensionWith({ state: 'stopped', lastStatus: { text: '已就绪：Qwen3-ASR 0.6B', level: 'info', at: 3 } })
+  host.listener(speechStatus([{ ...QWEN, state: 'ready' }, { ...SENSE, state: 'missing' }], { selected: QWEN.id }))
+  await settle()
+  assert.equal(p.el('audience-bot__speech-picker').hidden, true)
+  assert.equal(p.el('audience-bot__speech-active').textContent, '将使用：Qwen3-ASR 0.6B')
+  assert.equal(p.el('audience-bot__speech-download').hidden, true)
+})
+
+test('picker: a failed run shows its reason and the button works again; a refused start says why', async () => {
+  const p = page()
+  const host = speechHost({ ext: extensionWith({ state: 'failed', lastStatus: { text: '失败：校验不对，已删除下载的文件', level: 'error', at: 1 } }) })
+  await mountSpeech(p.document, host.sdk, { pollMs: 0 }).ready
+  assert.equal(p.el('audience-bot__speech-picker-status').textContent, '失败：校验不对，已删除下载的文件')
+  assert.ok(p.el('audience-bot__speech-picker-status').className.includes('speech-card__picker-status--error'))
+  assert.equal(p.el('audience-bot__speech-start').disabled, false)
+
+  const q = page()
+  const refused = speechHost({ startResult: { ok: false, error: 'failed', code: 'extension_not_running' } })
+  await mountSpeech(q.document, refused.sdk, { pollMs: 0 }).ready
+  q.click('audience-bot__speech-start')
+  await settle()
+  assert.equal(refused.starts.length, 1)
+  assert.match(q.el('audience-bot__speech-picker-status').textContent, /没能开始下载：扩展 audience-bot 还没在 设置 › Extensions 批准并打开/)
+  assert.equal(q.el('audience-bot__speech-start').disabled, false, 'can try again')
+
+  assert.match(startErrorText({ ok: false, error: 'not_found' }), /版本较旧/)
+  assert.match(startErrorText({ ok: false, error: 'host_unavailable' }), /Dozin 没有响应/)
+  assert.match(startErrorText({ ok: false, error: 'failed', code: 'missing_config' }), /missing_config/)
+})
+
+test('picker: an already running task is not a failure; a model already present is picked by default', async () => {
+  const p = page()
+  const host = speechHost({ startResult: { ok: false, error: 'failed', code: 'already_running' } })
+  await mountSpeech(p.document, host.sdk, { pollMs: 0 }).ready
+  host.ext = extensionWith({ state: 'running', lastStatus: { text: '下载断句模型 silero_vad', level: 'info', at: 1 } })
+  p.click('audience-bot__speech-start')
+  await settle()
+  assert.equal(p.el('audience-bot__speech-picker-status').textContent, '下载断句模型 silero_vad')
+  assert.equal(p.el('audience-bot__speech-start').disabled, true)
+
+  // SenseVoice is downloaded, only the sentence-cutting model is missing: no reason to fetch 880 MB.
+  const q = page()
+  const vadOnly = speechHost({ status: speechStatus([{ ...QWEN, state: 'missing' }, { ...SENSE, state: 'ready' }], { vad: { bytes: 643854, state: 'missing' } }) })
+  await mountSpeech(q.document, vadOnly.sdk, { pollMs: 0 }).ready
+  assert.deepEqual(radioState(q), ['qwen3-asr-0.6b:off', 'sensevoice-small:on'])
+})
+
+test('picker: with a usable model, on an unsupported computer or without MAESTROSDK.speech there is no picker', async () => {
+  const p = page()
+  const host = speechHost({ status: speechStatus([{ ...QWEN, state: 'ready' }, { ...SENSE, state: 'missing' }], { selected: QWEN.id }) })
+  await mountSpeech(p.document, host.sdk, { pollMs: 0 }).ready
+  assert.equal(p.el('audience-bot__speech-picker').hidden, true)
+  assert.equal(p.el('audience-bot__speech-download').hidden, true)
+  assert.equal(speechView(speechStatus([], { supported: false }), { control: { startable: true } }).picker.show, false)
+  assert.equal(speechView(null, { available: false }).picker.show, false)
+})
+
+test('picker: without startService, an extension not approved, missing or too old, the button is off, says why and keeps the sentence', async () => {
+  const cases = [
+    [{ startService: false }, /需要支持 MAESTROSDK\.extensions/],
+    [{ ext: extensionWith({}, { approval: 'pending', state: 'pending', switchedOn: false }) }, /扩展 audience-bot 还没在 设置 › Extensions 批准并打开/],
+    [{ ext: extensionWith({}, { switchedOn: false, state: 'disabled' }) }, /批准并打开/],
+    [{ ext: extensionWith({}, { state: 'backoff' }) }, /没在运行（backoff）/],
+    [{ ext: { ok: true, extension: null } }, /没装/],
+    [{ ext: { ok: false, error: 'not_owned' } }, /读不到扩展 audience-bot/],
+    [{ ext: extensionWith(null) }, /版本较旧/]
+  ]
+  for (const [setup, reason] of cases) {
+    const p = page()
+    const host = speechHost(setup)
+    await mountSpeech(p.document, host.sdk, { pollMs: 0 }).ready
+    assert.equal(p.el('audience-bot__speech-picker').hidden, false, String(reason))
+    assert.equal(p.el('audience-bot__speech-start').disabled, true, String(reason))
+    assert.match(p.el('audience-bot__speech-picker-reason').textContent, reason)
+    assert.equal(p.el('audience-bot__speech-download').hidden, false, 'the copyable sentence is the fallback')
+    assert.equal(p.el('audience-bot__speech-download-text').textContent, DOWNLOAD_SENTENCE)
+    p.click('audience-bot__speech-start')
+    await settle()
+    assert.equal(host.starts.length, 0)
+  }
+})
+
+test('picker: the task status is read again on every speech change and, while the picker shows, on a timer that stops afterwards', async () => {
+  const p = page()
+  const host = speechHost()
+  const card = mountSpeech(p.document, host.sdk, { pollMs: 5 })
+  await card.ready
+  const first = host.gets
+  await new Promise((done) => setTimeout(done, 40))
+  assert.ok(host.gets > first, 'polled while the picker shows')
+  host.listener(speechStatus([{ ...QWEN, state: 'ready' }, { ...SENSE, state: 'missing' }], { selected: QWEN.id }))
+  await settle()
+  const settled = host.gets
+  await new Promise((done) => setTimeout(done, 40))
+  assert.equal(host.gets, settled, 'no polling once a model is usable')
+  card.stop()
+})

@@ -9,7 +9,7 @@ import { parseHTML } from 'linkedom'
 
 const packageDir = new URL('../miniapp/extension/', import.meta.url)
 const { addToPanel, observeRoom, sendInRoom, setPanelStatus, showPanel } = await import(new URL('room.mjs', packageDir))
-const { DOWNLOAD_SENTENCE, FLOOR_DB, failureText, levelDb, levelText, speechFailureText, startTabSpeech, startTabVoice } = await import(new URL('voice.mjs', packageDir))
+const { FLOOR_DB, failureText, levelDb, levelText, speechFailureText, startTabSpeech, startTabVoice } = await import(new URL('voice.mjs', packageDir))
 const { activate, replyText } = await import(new URL('index.mjs', packageDir))
 
 const settle = async () => { for (let i = 0; i < 10; i++) await new Promise((done) => setImmediate(done)) }
@@ -38,12 +38,12 @@ const withPage = async (page, globals, run) => {
 }
 
 test('the package needs only its name and the browser capability; its connector has a chat and a short system prompt', async () => {
-  assert.deepEqual(readdirSync(packageDir).sort(), ['index.mjs', 'package.json', 'room.mjs', 'voice.mjs'])
+  assert.deepEqual(readdirSync(packageDir).sort(), ['index.mjs', 'package.json', 'room.mjs', 'speechModel.mjs', 'voice.mjs'])
   const manifest = JSON.parse(readFileSync(new URL('package.json', packageDir), 'utf8'))
   assert.equal(manifest.name, 'audience-bot', 'the connectors directory is named after the package')
   assert.equal(manifest.main, undefined, 'the entry falls back to index.mjs')
   assert.equal(manifest.pi, undefined)
-  assert.deepEqual(manifest.dozin.capabilities, ['browser', 'audio'])
+  assert.deepEqual(manifest.dozin.capabilities, ['browser', 'audio', 'service'])
   assert.equal(manifest.dozin.platforms, undefined, 'no platform gate: comments keep working where audio cannot')
   assert.deepEqual(manifest.dozin.origins, ['https://live.douyin.com'])
   let definition
@@ -396,7 +396,7 @@ const fakeSpeech = (sentences, { fail, reason = 'closed' } = {}) => {
 }
 
 test('speech: no model, downloading and an older Dozin each say so; only an older Dozin or platform stops the retries', async () => {
-  for (const [code, retry, words] of [['speech_model_missing', true, DOWNLOAD_SENTENCE], ['speech_model_downloading', true, '下载中'], ['audio_platform_unsupported', false, 'Apple 芯片']]) {
+  for (const [code, retry, words] of [['speech_model_missing', true, '语音模型未下载，在小程序 Audience BOT 里选择并下载'], ['speech_model_downloading', true, '下载中'], ['audio_platform_unsupported', false, 'Apple 芯片']]) {
     const status = [], ends = []
     startTabSpeech({ browser: fakeSpeech([], { fail: code }).browser, tabId: 'tab-28', setStatus: (text) => status.push(text), log() {}, onSentence() {}, onEnd: (detail) => ends.push(detail) })
     await settle()

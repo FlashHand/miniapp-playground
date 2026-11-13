@@ -107,12 +107,10 @@ export const startTabVoice = ({ browser, tabId, setStatus, log, onEnd, now = Dat
 // The host's voice, step 2 (docs/design.md #8.2): Dozin recognises the room tab's audio (`ctx.browser.transcribe`) and
 // hands back one sentence at a time. The extension carries no model and no recognition engine.
 
-/** What the person says to the AI to get the model downloaded (the douyin-live-reply skill does it). */
-export const DOWNLOAD_SENTENCE = '下载 Audience BOT 的语音模型'
 /** Failures that trying again will not fix; the others (no model yet, downloading, refresh) retry every few seconds. */
 const SPEECH_PERMANENT = new Set(['audio_platform_unsupported', 'capability_denied', 'speech_not_supported', 'audio_transport_unavailable'])
 const SPEECH_REASONS = {
-  speech_model_missing: `语音模型未下载，在对话里说「${DOWNLOAD_SENTENCE}」`,
+  speech_model_missing: '语音模型未下载，在小程序 Audience BOT 里选择并下载',
   speech_model_downloading: '语音模型下载中，下好后自动开始',
   speech_unavailable: '语音识别暂时不可用，稍后重试',
   speech_not_supported: '这个 Dozin 版本不支持语音识别',

@@ -130,4 +130,24 @@ body {
 .speech-card__model--missing .speech-card__progress { display: none; }
 .speech-card__model--ready .speech-card__progress-fill { background: var(--tint-ink); }
 .speech-card__download { color: var(--ink); }
+/* The model picker (speech-model-002): shown only while no model is usable. Hierarchy from background; no borders. */
+.speech-card__picker { display: flex; flex-direction: column; gap: 8px; }
+.speech-card__picker[hidden], .speech-card__choice[hidden], .speech-card__picker-status[hidden], .speech-card__picker-reason[hidden] { display: none; }
+.speech-card__picker-intro { color: var(--hint); }
+.speech-card__choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; }
+.speech-card__choice { display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; border-radius: 6px; background: var(--field); cursor: pointer; }
+.speech-card__choice:has(.speech-card__choice-input:checked) { background: var(--tint); }
+.speech-card__choice:has(.speech-card__choice-input:disabled) { cursor: default; opacity: 0.7; }
+.speech-card__choice-input { flex: none; margin: 3px 0 0; accent-color: var(--primary); }
+.speech-card__choice-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.speech-card__choice-name { font-weight: 600; }
+.speech-card__choice-tag { margin-left: 4px; padding: 0 6px; border-radius: 4px; background: oklch(1 0 0 / 0.7); color: var(--tint-ink); font-size: 11px; font-weight: 500; }
+.speech-card__choice-note { color: var(--hint); font-size: 12px; }
+.speech-card__picker-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.speech-card__start { flex: none; padding: 4px 14px; border: 0; border-radius: 6px; background: var(--primary); color: var(--primary-ink); font: inherit; cursor: pointer; }
+.speech-card__start:disabled { background: var(--muted-bg); color: var(--hint); cursor: default; }
+.speech-card__picker-status { min-width: 0; color: var(--hint); font-variant-numeric: tabular-nums; }
+.speech-card__picker-status--warn { color: var(--warn-ink); }
+.speech-card__picker-status--error { color: var(--error); }
+.speech-card__picker-reason { color: var(--warn-ink); }
 .speech-card__copy { vertical-align: middle; }

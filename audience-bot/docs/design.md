@@ -116,3 +116,39 @@ Ral 2026-11-08：识别选「Dozin 内置识别服务」（sherpa-onnx + Qwen3-A
 - 面板状态行：识别中写「主播语音：<模型名> · 识别中」；模型下载中写「主播语音：语音模型下载中，下好后自动开始」；未下载写「主播语音：语音模型未下载」并给出要对 AI 说的话；其他失败写原因。未下载、下载中、页面刷新、识别暂时不可用时每 3 秒重试；平台不支持、Dozin 版本不支持识别、扩展没有采音能力时不重试。同一个失败原因只记一次日志。
 - 人格页「主播语音」卡：用 `MAESTROSDK.speech.status()` 和 `onStatusChange` 显示每个模型的状态（已就绪 / 下载中百分比与 MB / 解压中 / 未下载）、下一路会用哪个、正在使用的模型与路数；一个已就绪的也没有且没在下载时，给一句可复制的话让 AI 下载。Dozin 没有 `MAESTROSDK.speech` 时说明需要更新，卡片不影响人格编辑。
 - 模型下载：技能 `douyin-live-reply` 的「下载语音模型」一节，只从 OSS 下载、核对 sha256，按 Dozin 的下载约定（`.download/` → 解压 → `mv`）放到 `<home>/speech-models/`，下载进度因此能在人格页看到。
+
+### #8.3 语音模型：检查与下载
+
+Ral 2026-11-14 02:12：「在 Extension 的初始化入口函数中，需要检查 A、Q 当前配置的是哪个模型，以及是否需要下载模型」「如果没有，需要人工去选择并进行初始化。我们可以提供两个模型供人工选择，并设置一个默认选项」。选择界面在小程序（任务 speech-model-002），扩展负责检查和下载（speech-model-001）。
+
+**当前配置的模型**就是 Dozin 会用的模型：下表里第一个已就绪的。扩展不另存人选的模型：人选哪个就下载哪个，下好后 Dozin 自然用它。清单和就绪规则抄自 Dozin `src/shared/speech/speechModels.ts` 与 `speechStatus.ts`，两边一起改。
+
+| 顺序 | id | 名字 | 目录（`<home>/speech-models/` 下） | 压缩包大小 | 就绪 |
+|---|---|---|---|---|---|
+| 1 | `qwen3-asr-0.6b` | Qwen3-ASR 0.6B | `sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25` | 878702423 B | `conv_frontend.onnx`、`encoder.int8.onnx`、`decoder.int8.onnx`、`tokenizer` 都在 |
+| 2 | `sensevoice-small` | SenseVoice Small | `sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17` | 163002883 B | `model.int8.onnx`、`tokens.txt` 都在 |
+| — | VAD | silero_vad | `silero_vad.onnx` | 643854 B | 大小正好 643854 B；没有它哪个模型都不会被用 |
+
+`<home>` 由扩展的数据目录（扩展进程的工作目录 `<home>/userdata/extensions/audience-bot/`）往上三级得出；路径不是这个形状时不检查、后台任务报错，不猜别的位置。
+
+**扩展加载时（`activate`）**：读 `<home>/speech-models/`，写一行扩展日志，例如 `speech model: Dozin will use Qwen3-ASR 0.6B (qwen3-asr-0.6b) — vad ready, qwen3-asr-0.6b ready, sensevoice-small missing`；没有可用模型时写 `none ready, download needed`，正在下载时写 `none ready, download in progress`。不自动下载（约 880 MB，要人选）。直播间写了 `"voice": "tab"` 而没有可用模型时，面板状态行写「主播语音：语音模型未下载，在小程序 Audience BOT 里选择并下载」（Dozin 的 `speech_model_missing`，每 3 秒重试，下好后自动开始识别）。
+
+**后台任务 `speech-model`**（名字「下载语音模型」，`start: "manual"`，失败不自动重试）。小程序调 `MAESTROSDK.extensions.startService('audience-bot', 'speech-model', { model })` 启动，清单因此加 `service` 能力（已装的扩展要在 设置 › Extensions 重新批准）。
+
+| 步 | 做什么 | `ctx.status` |
+|---|---|---|
+| 1 | `model` 不是上表两个 id 之一：报错 `unknown_model`，什么都不做 | 失败：不认识的模型 |
+| 2 | 不是 macOS Apple 芯片、找不到 `<home>`：报错，什么都不做 | 失败：原因 |
+| 3 | VAD 和这个模型都已就绪：直接结束 | 已就绪：Qwen3-ASR 0.6B |
+| 4 | `.download/` 里有这个模型或 VAD 的文件，它或它下面任何一个文件 15 秒内变过（看改动时间 ctime，别处在下载或解压）：报错 `download_busy`，不碰它；更早留下的（上次中断）删掉重下 | 失败：另一个下载正在进行 |
+| 5 | VAD 不在：从 OSS 下到 `.download/silero_vad.onnx`，核对字节数和 sha256，改名到 `<home>/speech-models/` | 下载断句模型 |
+| 6 | 下载压缩包到 `.download/<压缩包>`，边下边算 sha256；下完核对字节数和 sha256 | 下载 Qwen3-ASR 0.6B：312 / 879 MB（`progress` 为字节，约每秒一次） |
+| 7 | `/usr/bin/tar -xjf` 解压到 `.download/`（不要 `test_wavs`），核对就绪文件都在；目标目录有不全的旧目录就删掉；整个目录改名过去，删压缩包 | 解压中：…… |
+| 8 | 再检查一次 | 已就绪：…；另一个模型先就绪时写「Dozin 会先用已就绪的 …」 |
+
+- 地址只用 `https://dozin-public-assets.oss-cn-hangzhou.aliyuncs.com/models/speech-models/sherpa-onnx/<文件>`，不换地址。sha256 同技能 `douyin-live-reply` 第 1.1 节。
+- 任何一步失败：只删掉这次开始写的 `.download/` 文件和目录，状态写「失败：<原因>，已删除下载的文件」，任务记为失败；已就绪的模型和 VAD 不动。人停止任务时同样删掉，状态写「已停止」。不做断点续传。
+- 同时只跑一个：同一个任务再启动时宿主回 `already_running`；技能的下载脚本和这个任务不要同时跑（第 4 步能挡住正在变的文件）。
+- Dozin 从 `.download/` 的文件大小算下载进度，所以小程序用 `MAESTROSDK.speech` 就能显示百分比；失败原因看这个任务的 `lastStatus`。
+
+**已知限制**：两个模型都下好时 Dozin 总用 Qwen3-ASR。想改用 SenseVoice 要 Dozin 支持「首选模型」，本期不做；现在只能删掉 Qwen3-ASR 的目录。

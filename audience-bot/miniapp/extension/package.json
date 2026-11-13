@@ -4,7 +4,8 @@
   "dozin": {
     "capabilities": [
       "browser",
-      "audio"
+      "audio",
+      "service"
     ],
     "origins": [
       "https://live.douyin.com"

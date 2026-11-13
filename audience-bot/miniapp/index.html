@@ -37,6 +37,30 @@
       </div>
       <p class="speech-card__note" name="audience-bot__speech-note" hidden></p>
       <ul class="speech-card__models" name="audience-bot__speech-models"></ul>
+      <div class="speech-card__picker" name="audience-bot__speech-picker" hidden>
+        <p class="speech-card__picker-intro">还没有可用的语音模型。选一个下载，下载好后 Dozin 自动用它识别主播说的话。</p>
+        <div class="speech-card__choices" role="radiogroup" aria-label="语音模型">
+          <label class="speech-card__choice">
+            <input class="speech-card__choice-input" type="radio" name="audience-bot__speech-choice" value="qwen3-asr-0.6b" checked>
+            <span class="speech-card__choice-body">
+              <span class="speech-card__choice-name">Qwen3-ASR 0.6B <span class="speech-card__choice-tag">默认</span></span>
+              <span class="speech-card__choice-note">约 880 MB · 中文更准，带标点；识别时多用约 1.5 GB 内存</span>
+            </span>
+          </label>
+          <label class="speech-card__choice">
+            <input class="speech-card__choice-input" type="radio" name="audience-bot__speech-choice" value="sensevoice-small">
+            <span class="speech-card__choice-body">
+              <span class="speech-card__choice-name">SenseVoice Small</span>
+              <span class="speech-card__choice-note">约 163 MB · 更小、更省内存，中文略差</span>
+            </span>
+          </label>
+        </div>
+        <div class="speech-card__picker-actions">
+          <button class="speech-card__start" name="audience-bot__speech-start" type="button" disabled>下载并初始化</button>
+          <span class="speech-card__picker-status" name="audience-bot__speech-picker-status" hidden></span>
+        </div>
+        <p class="speech-card__picker-reason" name="audience-bot__speech-picker-reason" hidden></p>
+      </div>
       <p class="speech-card__download" name="audience-bot__speech-download" hidden>要识别主播说的话，先在对话里说：「<span name="audience-bot__speech-download-text"></span>」
         <button class="icon-btn speech-card__copy" name="audience-bot__copy-download" type="button" aria-label="复制这句话" title="复制这句话"><svg viewBox="0 0 24 24"><path d="M7 9.667a2.667 2.667 0 0 1 2.667 -2.667h8.666a2.667 2.667 0 0 1 2.667 2.667v8.666a2.667 2.667 0 0 1 -2.667 2.667h-8.666a2.667 2.667 0 0 1 -2.667 -2.667z"/><path d="M4.012 16.737a2.005 2.005 0 0 1 -1.012 -1.737v-10c0 -1.1 .9 -2 2 -2h10c.75 0 1.158 .385 1.5 1"/></svg></button>
       </p>

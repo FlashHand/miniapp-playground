@@ -6,6 +6,7 @@ import { readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { addToPanel, observeRoom, sendInRoom, setPanelStatus, showPanel } from './room.mjs'
 import { startTabSpeech, startTabVoice } from './voice.mjs'
+import { checkSpeechModels, runSpeechModel, speechCheckLine, speechModelsRoot } from './speechModel.mjs'
 
 const SYSTEM_PROMPT = [
   '你在抖音直播间里替这个账号回弹幕。',
@@ -38,6 +39,17 @@ const readTarget = async () => {
     }
   } catch {
     return undefined
+  }
+}
+
+/** One log line on which speech model Dozin will use, or that one has to be downloaded (docs/design.md #8.3). */
+export const logSpeechModels = async (log, dataDir = process.cwd()) => {
+  const root = speechModelsRoot(dataDir)
+  if (!root) return log('speech model: not checked (the data directory is not <home>/userdata/extensions/<name>)')
+  try {
+    log(speechCheckLine(await checkSpeechModels(root)))
+  } catch (error) {
+    log(`speech model: check failed: ${error?.code || error?.message || 'error'}`)
   }
 }
 
@@ -239,4 +251,15 @@ export function activate(dozin) {
       return outcome
     }
   })
+
+  // docs/design.md #8.3: the mini app starts it with { model }; an older Dozin without background tasks has no registerService.
+  if (typeof dozin.registerService === 'function') {
+    try {
+      dozin.registerService({ id: 'speech-model', name: '下载语音模型', start: 'manual', restart: { policy: 'never' }, run: (ctx) => runSpeechModel(ctx) })
+    } catch (error) {
+      dozin.log?.(`speech-model: not registered: ${error?.message || 'error'}`)
+    }
+  }
+  // Not downloaded here: about 880 MB, and the person chooses the model.
+  void logSpeechModels((text) => dozin.log?.(text))
 }
